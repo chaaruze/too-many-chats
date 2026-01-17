@@ -1,6 +1,6 @@
 /**
  * Chat Folders Extension Styles
- * Matches SillyTavern's dark theme
+ * Matches SillyTavern's native button style (white/light theme)
  */
 
 /* ========== MODAL OVERLAY ========== */
@@ -20,8 +20,13 @@
 }
 
 @keyframes chatFoldersModalFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .chat_folders_modal_content {
@@ -38,8 +43,15 @@
 }
 
 @keyframes chatFoldersModalSlideIn {
-    from { transform: translateY(-20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 /* ========== MODAL HEADER ========== */
@@ -54,14 +66,14 @@
 .chat_folders_modal_header h3 {
     margin: 0;
     font-size: 1.1em;
-    color: var(--SmartThemeBodyColor, #eee);
+    color: var(--SmartThemeBodyColor, #ccc);
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
 .chat_folders_modal_header h3 i {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .chat_folders_modal_close {
@@ -99,14 +111,14 @@
     border: 1px solid var(--SmartThemeBorderColor, #444);
     border-radius: 8px;
     background: var(--SmartThemeEmColor, #252540);
-    color: var(--SmartThemeBodyColor, #eee);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-size: 14px;
     transition: border-color 0.15s ease;
 }
 
 .chat_folders_new_folder input:focus {
     outline: none;
-    border-color: var(--SmartThemeQuoteColor, #f0ad4e);
+    border-color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .chat_folders_new_folder input::placeholder {
@@ -116,17 +128,17 @@
 
 .chat_folders_new_folder button {
     padding: 10px 16px;
-    background: var(--SmartThemeQuoteColor, #f0ad4e);
-    border: none;
+    background: transparent;
+    border: 1px solid var(--SmartThemeBorderColor, #444);
     border-radius: 8px;
-    color: #1a1a2e;
+    color: var(--SmartThemeBodyColor, #ccc);
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .chat_folders_new_folder button:hover {
-    filter: brightness(1.1);
-    transform: scale(1.02);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--SmartThemeBodyColor, #ccc);
 }
 
 /* ========== FOLDER LIST ========== */
@@ -155,18 +167,18 @@
 }
 
 .chat_folders_item:hover {
-    border-color: var(--SmartThemeQuoteColor, #f0ad4e);
-    background: rgba(240, 173, 78, 0.05);
+    border-color: var(--SmartThemeBodyColor, #ccc);
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .chat_folders_icon {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-size: 16px;
 }
 
 .chat_folders_name {
     flex: 1;
-    color: var(--SmartThemeBodyColor, #eee);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-weight: 500;
 }
 
@@ -190,8 +202,8 @@
 }
 
 .chat_folders_edit_btn:hover {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
-    border-color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #fff);
+    border-color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .chat_folders_delete_btn:hover {
@@ -220,8 +232,8 @@
 }
 
 .chat_folder_header:hover {
-    background: rgba(240, 173, 78, 0.08);
-    border-color: var(--SmartThemeQuoteColor, #f0ad4e);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .chat_folder_toggle {
@@ -232,13 +244,13 @@
 }
 
 .chat_folder_icon {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-size: 14px;
 }
 
 .chat_folder_name {
     flex: 1;
-    color: var(--SmartThemeBodyColor, #eee);
+    color: var(--SmartThemeBodyColor, #ccc);
     font-weight: 500;
     font-size: 13px;
 }
@@ -246,8 +258,8 @@
 .chat_folder_badge {
     font-size: 11px;
     padding: 2px 8px;
-    background: rgba(240, 173, 78, 0.15);
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--SmartThemeBodyColor, #ccc);
     border-radius: 10px;
 }
 
@@ -297,8 +309,15 @@
 }
 
 @keyframes contextMenuFadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .chat_folders_context_header {
@@ -315,18 +334,18 @@
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    color: var(--SmartThemeBodyColor, #eee);
+    color: var(--SmartThemeBodyColor, #ccc);
     cursor: pointer;
     transition: all 0.12s ease;
 }
 
 .chat_folders_context_item:hover {
-    background: rgba(240, 173, 78, 0.1);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .chat_folders_context_item.active {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
-    background: rgba(240, 173, 78, 0.08);
+    color: var(--SmartThemeBodyColor, #fff);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .chat_folders_context_item.active::after {
@@ -337,7 +356,7 @@
 .chat_folders_context_item i {
     width: 16px;
     text-align: center;
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .chat_folders_context_new {
@@ -362,5 +381,5 @@
 }
 
 #chat_folders_manage_btn i {
-    color: var(--SmartThemeQuoteColor, #f0ad4e);
+    color: var(--SmartThemeBodyColor, #ccc);
 }

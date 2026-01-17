@@ -133,7 +133,7 @@ Contributions are welcome! Feel free to:
 
 <div align="center">
 
-Made with ❤️ by [chaaruze](https://github.com/chaaruze)
+Made with ❤️ by [chaaruze](https://github.com/chaaruze) using [Google Antigravity](https://cloud.google.com)
 
 **If you find this useful, consider giving it a ⭐!**
 
