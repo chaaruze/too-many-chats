@@ -1,175 +1,225 @@
 /**
- * Too Many Chats - Styles v1.4.0
+ * Too Many Chats - Styles v1.5.0 (UI Overhaul)
+ * Uses SillyTavern's native CSS variables and classes
  */
 
-/* Root Container override */
+/* Root Container */
 .tmc_root {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    /* Close gap */
+    gap: 4px;
     width: 100%;
     margin-bottom: 20px;
 }
 
 /* Folder Rows */
 .tmc_folder_row {
-    border: 1px solid var(--SmartThemeBorderColor, #444);
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 4px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: var(--SmartThemeBlurTintColor);
+    border-radius: var(--minibar-button-border-radius, 10px);
     margin-bottom: 4px;
     overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Header */
 .tmc_header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.05);
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--SmartThemeInputColor);
+    /* Often lighter/different than bg */
     cursor: pointer;
     user-select: none;
-    font-size: 13px;
-    color: var(--SmartThemeBodyColor, #ccc);
+    font-size: 14px;
+    color: var(--SmartThemeBodyColor);
+    transition: background 0.2s;
 }
 
 .tmc_header:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--SmartThemeUpperBarColor);
+    /* Hover effect */
+}
+
+/* Main Clickable Area */
+.tmc_header_main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
 }
 
 .tmc_toggle {
     font-family: monospace;
-    width: 14px;
+    width: 16px;
     text-align: center;
-    color: #888;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.7;
+}
+
+.tmc_icon {
+    font-size: 16px;
 }
 
 .tmc_name {
-    flex: 1;
     font-weight: 600;
+    color: var(--SmartThemeHeaderColor);
 }
 
 .tmc_count {
     font-size: 10px;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 2px 6px;
-    border-radius: 8px;
-    color: #aaa;
+    background: var(--SmartThemeBorderColor);
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.8;
 }
 
+/* Actions */
 .tmc_actions {
-    display: none;
-    /* Show on hover */
-    gap: 4px;
+    display: flex;
+    gap: 8px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
 }
 
 .tmc_header:hover .tmc_actions {
-    display: flex;
+    opacity: 1;
 }
 
 .tmc_btn {
-    padding: 2px 6px;
+    padding: 4px 6px;
     font-size: 12px;
     border-radius: 4px;
     cursor: pointer;
+    color: var(--SmartThemeBodyColor);
 }
 
 .tmc_btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--SmartThemeBorderColor);
+    color: var(--SmartThemeQuoteColor);
 }
 
-/* Content (Container for Actual Chat Blocks) */
+.tmc_del:hover {
+    color: #ff6b6b;
+    /* Warn color */
+}
+
+/* Content Area */
 .tmc_content {
     display: flex;
     flex-direction: column;
-    gap: 0;
-    /* Align perfectly */
     padding: 0;
-    margin: 0;
+    background: rgba(0, 0, 0, 0.1);
 }
 
-/* Override ST's block styles if needed to fit nicely */
+/* Chat Blocks Override */
 .tmc_content .select_chat_block {
     margin: 0 !important;
     width: 100% !important;
     border: none !important;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #333) !important;
+    border-bottom: 1px solid var(--SmartThemeBorderColor) !important;
     border-radius: 0 !important;
-    padding: 8px 12px !important;
+    padding: 10px 14px !important;
     background: transparent !important;
+    transition: background 0.15s;
 }
 
 .tmc_content .select_chat_block:hover {
-    background: rgba(255, 255, 255, 0.04) !important;
+    background: var(--SmartThemeUpperBarColor) !important;
 }
 
-/* Uncategorized Styling */
+.tmc_content .select_chat_block:last-child {
+    border-bottom: none !important;
+}
+
+/* Uncategorized */
 .tmc_uncat {
-    border-color: transparent;
+    border: none;
     background: transparent;
+    box-shadow: none;
+    margin-top: 10px;
 }
 
 .tmc_uncat .tmc_header {
     background: transparent;
-    opacity: 0.7;
+    opacity: 0.6;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
 }
 
-/* Context Menu */
+.tmc_uncat .tmc_header:hover {
+    opacity: 1;
+}
+
+/* Context Menu - Use standard dropdown styles */
 .tmc_ctx {
     position: fixed;
-    background: var(--SmartThemeBlurTintColor, #1f1f33);
-    border: 1px solid var(--SmartThemeBorderColor, #888);
+    background: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-    z-index: 99999;
-    min-width: 150px;
-    border-radius: 6px;
-    padding: 4px 0;
+    z-index: 20002;
+    /* Above everything */
+    min-width: 180px;
+    border-radius: var(--minibar-button-border-radius, 8px);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
 }
 
 .tmc_ctx_head {
-    padding: 6px 12px;
+    padding: 8px 12px;
     font-size: 11px;
-    color: #888;
+    color: var(--SmartThemeBodyColor);
+    opacity: 0.7;
     text-transform: uppercase;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 4px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 .tmc_ctx_item {
-    padding: 8px 12px;
-    color: var(--SmartThemeBodyColor, #ddd);
+    padding: 10px 14px;
+    color: var(--SmartThemeBodyColor);
     cursor: pointer;
     font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
 }
 
 .tmc_ctx_item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--SmartThemeUpperBarColor);
+    color: var(--SmartThemeQuoteColor);
 }
 
 .tmc_ctx_sep {
     height: 1px;
-    background: rgba(255, 255, 255, 0.1);
-    margin: 4px 0;
+    background: var(--SmartThemeBorderColor);
+    margin: 0;
 }
 
 .tmc_new {
-    color: #8c8;
+    color: #4cd137;
+    /* Success color */
 }
 
-/* Add Button in Popup Header */
+/* Add Button in Popup - Match menu_button */
 .tmc_add_btn {
+    font-size: 16px;
+    cursor: pointer;
+    margin-left: 8px;
+    opacity: 0.7;
+    transition: all 0.2s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    margin-left: 8px;
-    transition: background 0.2s;
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
 }
 
 .tmc_add_btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+    background: var(--SmartThemeBorderColor);
+    color: var(--SmartThemeQuoteColor);
 }
