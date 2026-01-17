@@ -1,9 +1,9 @@
 /**
  * Too Many Chats - SillyTavern Extension
  * Organizes chats per character into collapsible folders
- * Architecture: Move & Persist (v1.5.0)
+ * v1.5.1 - Critical Fix for Folder Duplication
  * @author chaaruze
- * @version 1.5.0
+ * @version 1.5.1
  */
 
 (function () {
@@ -15,11 +15,12 @@
     const defaultSettings = Object.freeze({
         folders: {},
         characterFolders: {},
-        version: '1.5.0'
+        version: '1.5.1'
     });
 
     let observer = null;
-    let isMoving = false;
+    let isOrganizing = false;
+    let organizeDebounceTimer = null;
 
     // ========== SETTINGS ==========
 
@@ -68,6 +69,7 @@
     // ========== FOLDER LOGIC ==========
 
     function createFolder(name) {
+        if (!name || !name.trim()) return;
         const settings = getSettings();
         const characterId = getCurrentCharacterId();
         if (!characterId) {
@@ -79,7 +81,7 @@
         const existingCount = (settings.characterFolders[characterId] || []).length;
 
         settings.folders[folderId] = {
-            name: name || 'Folder',
+            name: name.trim(),
             chats: [],
             collapsed: false,
             order: existingCount
@@ -89,15 +91,16 @@
         settings.characterFolders[characterId].push(folderId);
 
         saveSettings();
-        refreshUI();
+        scheduleOrganize();
     }
 
     function renameFolder(folderId, newName) {
+        if (!newName || !newName.trim()) return;
         const settings = getSettings();
         if (settings.folders[folderId]) {
-            settings.folders[folderId].name = newName;
+            settings.folders[folderId].name = newName.trim();
             saveSettings();
-            refreshUI();
+            scheduleOrganize();
         }
     }
 
@@ -114,7 +117,7 @@
 
         delete settings.folders[folderId];
         saveSettings();
-        refreshUI();
+        scheduleOrganize();
     }
 
     function toggleCollapse(folderId) {
@@ -135,7 +138,6 @@
         const characterId = getCurrentCharacterId();
         if (!characterId) return;
 
-        // Remove from source
         const allFolderIds = settings.characterFolders[characterId] || [];
         for (const fid of allFolderIds) {
             const folder = settings.folders[fid];
@@ -145,7 +147,6 @@
             }
         }
 
-        // Add to target
         if (targetFolderId && targetFolderId !== 'uncategorized') {
             const folder = settings.folders[targetFolderId];
             if (folder) {
@@ -155,13 +156,13 @@
         }
 
         saveSettings();
-        refreshUI();
+        scheduleOrganize();
     }
 
     function getFolderForChat(fileName) {
         const settings = getSettings();
         const characterId = getCurrentCharacterId();
-        if (!characterId) return null;
+        if (!characterId) return 'uncategorized';
 
         const folderIds = settings.characterFolders[characterId] || [];
         for (const fid of folderIds) {
@@ -175,42 +176,63 @@
 
     // ========== DOM ENGINE ==========
 
-    function refreshUI() {
-        organizeChats();
-        injectAddButton();
+    function scheduleOrganize() {
+        clearTimeout(organizeDebounceTimer);
+        organizeDebounceTimer = setTimeout(organizeChats, 100);
     }
 
     function organizeChats() {
-        if (isMoving) return;
-        isMoving = true;
+        if (isOrganizing) return;
+        isOrganizing = true;
 
         try {
             const popup = document.querySelector('#shadow_select_chat_popup');
-            if (!popup) return;
+            if (!popup || popup.style.display === 'none') return;
 
-            const sampleBlock = popup.querySelector('.select_chat_block');
-            let container;
-            if (sampleBlock) {
-                container = sampleBlock.parentElement;
-            } else {
-                container = popup.querySelector('.tmc_root')?.parentElement;
-                if (!container) container = popup.querySelector('.select_chat_block_wrapper');
+            // Find the wrapper where ST puts chat blocks
+            const wrapper = popup.querySelector('.select_chat_block_wrapper');
+            if (!wrapper) return;
+
+            // CRITICAL: Only create ONE root, and clean up any extras
+            let roots = wrapper.querySelectorAll('.tmc_root');
+            let root;
+            if (roots.length > 1) {
+                // Duplicates detected! Clean up all but the first
+                for (let i = 1; i < roots.length; i++) {
+                    roots[i].remove();
+                }
             }
-            if (!container) return;
-
-            let root = container.querySelector('.tmc_root');
+            root = wrapper.querySelector('.tmc_root');
             if (!root) {
                 root = document.createElement('div');
                 root.className = 'tmc_root';
-                container.prepend(root);
+                wrapper.prepend(root);
             }
 
             const characterId = getCurrentCharacterId();
-            const settings = getSettings();
-            const folderIds = (settings.characterFolders[characterId] || []);
-            const folderElements = {};
+            if (!characterId) return;
 
-            // Create/Update Folders
+            const settings = getSettings();
+            const folderIds = settings.characterFolders[characterId] || [];
+
+            // Track existing folder elements
+            const existingFolderRows = new Map();
+            root.querySelectorAll('.tmc_folder_row').forEach(row => {
+                existingFolderRows.set(row.dataset.id, row);
+            });
+
+            // Expected folder IDs (including uncategorized)
+            const expectedIds = new Set([...folderIds, 'uncategorized']);
+
+            // Remove folders that shouldn't exist
+            existingFolderRows.forEach((row, id) => {
+                if (!expectedIds.has(id)) {
+                    row.remove();
+                }
+            });
+
+            // Create/update user folders
+            const folderContents = {};
             folderIds.forEach(fid => {
                 const folder = settings.folders[fid];
                 if (!folder) return;
@@ -220,60 +242,68 @@
                     fNode = createFolderDOM(fid, folder);
                     root.appendChild(fNode);
                 } else {
-                    updateFolderHeader(fNode, folder, fid);
+                    // Update name if changed
+                    const nameEl = fNode.querySelector('.tmc_name');
+                    if (nameEl && nameEl.textContent !== folder.name) {
+                        nameEl.textContent = folder.name;
+                    }
                 }
-                folderElements[fid] = fNode.querySelector('.tmc_content');
+                folderContents[fid] = fNode.querySelector('.tmc_content');
             });
 
-            // Uncategorized
+            // Create/get uncategorized
             let uncatNode = root.querySelector('.tmc_folder_row[data-id="uncategorized"]');
             if (!uncatNode) {
                 uncatNode = createUncategorizedDOM();
                 root.appendChild(uncatNode);
             }
-            folderElements['uncategorized'] = uncatNode.querySelector('.tmc_content');
+            folderContents['uncategorized'] = uncatNode.querySelector('.tmc_content');
 
-            // Move Chats
-            const allBlocks = Array.from(container.querySelectorAll('.select_chat_block'));
+            // Gather ALL chat blocks (including those already in folders)
+            const allBlocks = Array.from(wrapper.querySelectorAll('.select_chat_block'));
+
+            // Move each block to correct folder
             allBlocks.forEach(block => {
                 const fileName = block.getAttribute('file_name') || block.textContent.trim();
                 if (!fileName) return;
 
                 const targetFid = getFolderForChat(fileName);
-                const targetContent = folderElements[targetFid];
+                const targetContent = folderContents[targetFid];
 
-                if (block.parentElement !== targetContent) {
+                if (targetContent && block.parentElement !== targetContent) {
                     targetContent.appendChild(block);
                 }
 
-                if (!block.dataset.tmcInited) {
+                // Context menu (once)
+                if (!block.dataset.tmcCtx) {
                     block.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         showContextMenu(e, fileName);
                     });
-                    block.dataset.tmcInited = 'true';
+                    block.dataset.tmcCtx = '1';
                 }
             });
 
-            // Counts & Cleanup
-            Object.keys(folderElements).forEach(fid => {
-                const count = folderElements[fid].children.length;
-                const row = folderElements[fid].closest('.tmc_folder_row');
-                const countEl = row.querySelector('.tmc_count');
+            // Update counts
+            Object.entries(folderContents).forEach(([fid, content]) => {
+                const count = content.children.length;
+                const row = content.closest('.tmc_folder_row');
+                const countEl = row?.querySelector('.tmc_count');
                 if (countEl) countEl.textContent = count;
 
                 if (fid === 'uncategorized') {
-                    row.style.display = count > 0 ? 'block' : 'none';
-                    // If no folders exist, maybe hide the uncategorized header too? 
-                    // But user wanted overhaul. Let's keep it visible.
+                    row.style.display = count > 0 ? '' : 'none';
                 }
             });
 
+            // Inject add button
+            injectAddButton(popup);
+
         } catch (err) {
-            console.error('[TMC] Error organizing:', err);
+            console.error('[TMC] Error:', err);
         } finally {
-            isMoving = false;
+            isOrganizing = false;
         }
     }
 
@@ -285,7 +315,7 @@
         const header = document.createElement('div');
         header.className = 'tmc_header';
         header.innerHTML = `
-            <div class="tmc_header_main" title="Toggle Collapse">
+            <div class="tmc_header_main">
                 <span class="tmc_toggle" data-id="${fid}">${folder.collapsed ? '▶' : '▼'}</span>
                 <span class="tmc_icon">📁</span>
                 <span class="tmc_name">${escapeHtml(folder.name)}</span>
@@ -297,30 +327,21 @@
             </div>
         `;
 
-        // FIXED: Better Event Delegation
-        const editBtn = header.querySelector('.tmc_edit');
-        const delBtn = header.querySelector('.tmc_del');
-        const mainHeader = header.querySelector('.tmc_header_main');
-
-        editBtn.addEventListener('click', (e) => {
+        header.querySelector('.tmc_header_main').addEventListener('click', () => toggleCollapse(fid));
+        header.querySelector('.tmc_edit').addEventListener('click', (e) => {
             e.stopPropagation();
-            const n = prompt('Rename Folder:', folder.name);
-            if (n && n.trim()) renameFolder(fid, n.trim());
+            const n = prompt('Rename:', folder.name);
+            if (n) renameFolder(fid, n);
         });
-
-        delBtn.addEventListener('click', (e) => {
+        header.querySelector('.tmc_del').addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm(`Delete folder "${folder.name}"? Chats will be uncategorized.`)) {
-                deleteFolder(fid);
-            }
+            if (confirm(`Delete "${folder.name}"?`)) deleteFolder(fid);
         });
-
-        mainHeader.addEventListener('click', () => toggleCollapse(fid));
 
         const content = document.createElement('div');
         content.className = 'tmc_content';
         content.dataset.id = fid;
-        content.style.display = folder.collapsed ? 'none' : 'block';
+        content.style.display = folder.collapsed ? 'none' : '';
 
         row.appendChild(header);
         row.appendChild(content);
@@ -335,7 +356,7 @@
         const header = document.createElement('div');
         header.className = 'tmc_header';
         header.innerHTML = `
-            <div class="tmc_header_main" style="cursor:default">
+            <div class="tmc_header_main">
                 <span class="tmc_icon">📄</span>
                 <span class="tmc_name">Uncategorized</span>
                 <span class="tmc_count">0</span>
@@ -351,45 +372,37 @@
         return row;
     }
 
-    function updateFolderHeader(row, folder, fid) {
-        row.querySelector('.tmc_name').textContent = folder.name;
-    }
+    function injectAddButton(popup) {
+        if (popup.querySelector('.tmc_add_btn')) return;
 
-    function injectAddButton() {
-        const popup = document.querySelector('#shadow_select_chat_popup');
-        if (!popup) return;
+        const headerRow = popup.querySelector('.shadow_select_chat_popup_header') || popup.querySelector('h3');
+        if (!headerRow) return;
 
-        const headerRow = popup.querySelector('.shadow_select_chat_popup_header') ||
-            popup.querySelector('h3');
+        const btn = document.createElement('div');
+        btn.className = 'tmc_add_btn menu_button';
+        btn.innerHTML = '<i class="fa-solid fa-folder-plus"></i>';
+        btn.title = 'New Folder';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const n = prompt('New Folder Name:');
+            if (n) createFolder(n);
+        };
 
-        if (headerRow && !headerRow.querySelector('.tmc_add_btn')) {
-            const btn = document.createElement('div');
-            btn.className = 'tmc_add_btn menu_button'; // Use ST class
-            btn.innerHTML = '<i class="fa-solid fa-folder-plus"></i>';
-            btn.title = "New Folder";
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const n = prompt('New Folder Name:');
-                if (n && n.trim()) createFolder(n.trim());
-            };
-
-            // Insert next to close button or at end
-            const closeBtn = headerRow.querySelector('#select_chat_cross');
-            if (closeBtn) {
-                headerRow.insertBefore(btn, closeBtn);
-            } else {
-                headerRow.appendChild(btn);
-            }
+        const closeBtn = headerRow.querySelector('#select_chat_cross');
+        if (closeBtn) {
+            headerRow.insertBefore(btn, closeBtn);
+        } else {
+            headerRow.appendChild(btn);
         }
     }
 
     // ========== CONTEXT MENU ==========
 
     function showContextMenu(e, fileName) {
-        document.querySelectorAll('.tmc_ctx').forEach(e => e.remove());
+        document.querySelectorAll('.tmc_ctx').forEach(m => m.remove());
 
         const menu = document.createElement('div');
-        menu.className = 'tmc_ctx list-group'; // ST Native look
+        menu.className = 'tmc_ctx';
         menu.style.top = e.pageY + 'px';
         menu.style.left = e.pageX + 'px';
 
@@ -397,14 +410,14 @@
         const charId = getCurrentCharacterId();
         const folderIds = settings.characterFolders[charId] || [];
 
-        let html = `<div class="tmc_ctx_head">Move "${fileName}"</div>`;
+        let html = `<div class="tmc_ctx_head">Move to folder</div>`;
         folderIds.forEach(fid => {
             const f = settings.folders[fid];
-            html += `<div class="tmc_ctx_item list-group-item" data-fid="${fid}">📁 ${escapeHtml(f.name)}</div>`;
+            if (f) html += `<div class="tmc_ctx_item" data-fid="${fid}">📁 ${escapeHtml(f.name)}</div>`;
         });
         html += `<div class="tmc_ctx_sep"></div>`;
-        html += `<div class="tmc_ctx_item list-group-item" data-fid="uncategorized">📄 Uncategorized</div>`;
-        html += `<div class="tmc_ctx_item list-group-item tmc_new">➕ New Folder</div>`;
+        html += `<div class="tmc_ctx_item" data-fid="uncategorized">📄 Uncategorized</div>`;
+        html += `<div class="tmc_ctx_item tmc_new">➕ New Folder</div>`;
 
         menu.innerHTML = html;
         document.body.appendChild(menu);
@@ -414,12 +427,7 @@
             if (!item) return;
             if (item.classList.contains('tmc_new')) {
                 const name = prompt('Folder Name:');
-                if (name && name.trim()) {
-                    createFolder(name.trim());
-                    // Note: Ideally we move to the new folder immediately, 
-                    // but we'd need to wait for ID generation and sync. 
-                    // For now, user just creates it.
-                }
+                if (name) createFolder(name);
             } else {
                 moveChat(fileName, item.dataset.fid);
             }
@@ -427,11 +435,8 @@
         };
 
         setTimeout(() => {
-            document.addEventListener('click', function c() {
-                menu.remove();
-                document.removeEventListener('click', c);
-            }, { once: true });
-        }, 100);
+            document.addEventListener('click', () => menu.remove(), { once: true });
+        }, 50);
     }
 
     // ========== OBSERVER ==========
@@ -439,20 +444,20 @@
     function initObserver() {
         if (observer) observer.disconnect();
 
-        observer = new MutationObserver((mutations) => {
-            let needsOrg = false;
-            for (const m of mutations) {
-                if (m.addedNodes.length > 0) {
-                    for (const node of m.addedNodes) {
-                        if (node.nodeType === 1 && node.classList.contains('select_chat_block')) {
-                            if (!node.closest('.tmc_content')) {
-                                needsOrg = true;
-                            }
-                        }
+        observer = new MutationObserver(() => {
+            const popup = document.querySelector('#shadow_select_chat_popup');
+            if (popup && popup.style.display !== 'none') {
+                // Check for loose blocks
+                const wrapper = popup.querySelector('.select_chat_block_wrapper');
+                if (wrapper) {
+                    const looseBlocks = Array.from(wrapper.children).filter(
+                        el => el.classList.contains('select_chat_block')
+                    );
+                    if (looseBlocks.length > 0) {
+                        scheduleOrganize();
                     }
                 }
             }
-            if (needsOrg) organizeChats();
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
@@ -461,23 +466,26 @@
     // ========== INIT ==========
 
     function init() {
-        console.log(`[${EXTENSION_NAME}] v1.5.0 Loading...`);
+        console.log(`[${EXTENSION_NAME}] v1.5.1 Loading...`);
         const ctx = SillyTavern.getContext();
 
-        ctx.eventSource.on(ctx.event_types.CHAT_CHANGED, () => {
-            setTimeout(refreshUI, 100);
-        });
+        ctx.eventSource.on(ctx.event_types.CHAT_CHANGED, scheduleOrganize);
 
+        // Periodic fallback check
         setInterval(() => {
             const popup = document.querySelector('#shadow_select_chat_popup');
             if (popup && popup.style.display !== 'none') {
-                const loose = popup.querySelectorAll('.select_chat_block_wrapper > .select_chat_block');
-                if (loose.length > 0) organizeChats();
+                const wrapper = popup.querySelector('.select_chat_block_wrapper');
+                const roots = wrapper?.querySelectorAll('.tmc_root');
+                // If duplicates or loose blocks, fix it
+                if (roots && roots.length > 1) {
+                    scheduleOrganize();
+                }
             }
-        }, 2000);
+        }, 3000);
 
         initObserver();
-        setTimeout(refreshUI, 1000);
+        setTimeout(scheduleOrganize, 500);
     }
 
     if (document.readyState === 'loading') {
