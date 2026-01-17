@@ -35,9 +35,12 @@
     border: 1px solid var(--SmartThemeBorderColor);
     background: var(--SmartThemeBlurTintColor);
     border-radius: 8px;
-    overflow: hidden;
+    /* CRITICAL FIX: Remove overflow:hidden to allow parent scroll detection */
+    overflow: visible;
     margin-bottom: 4px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    /* Prevent flex from squeezing sections */
+    flex-shrink: 0;
 }
 
 /* Header */
