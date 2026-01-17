@@ -1,33 +1,37 @@
 /**
- * Too Many Chats - Styles v1.3.0
+ * Too Many Chats - Styles v1.4.0
  */
 
-/* Shadow Container */
-#tmc_shadow_container {
+/* Root Container override */
+.tmc_root {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-bottom: 10px;
+    gap: 2px;
+    /* Close gap */
+    width: 100%;
+    margin-bottom: 20px;
 }
 
-/* Folder Row */
+/* Folder Rows */
 .tmc_folder_row {
-    background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--SmartThemeBorderColor, #444);
-    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin-bottom: 4px;
     overflow: hidden;
 }
 
-/* Headers */
+/* Header */
 .tmc_header {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 10px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.03);
     user-select: none;
-    transition: background 0.2s;
+    font-size: 13px;
+    color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .tmc_header:hover {
@@ -35,112 +39,108 @@
 }
 
 .tmc_toggle {
-    font-size: 10px;
+    font-family: monospace;
     width: 14px;
     text-align: center;
-    color: var(--SmartThemeBodyColor, #888);
-}
-
-.tmc_icon {
-    font-size: 14px;
+    color: #888;
 }
 
 .tmc_name {
     flex: 1;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--SmartThemeBodyColor, #ccc);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-weight: 600;
 }
 
 .tmc_count {
-    font-size: 11px;
+    font-size: 10px;
+    background: rgba(0, 0, 0, 0.3);
     padding: 2px 6px;
-    background: rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    color: var(--SmartThemeBodyColor, #aaa);
+    color: #aaa;
 }
 
 .tmc_actions {
-    display: flex;
+    display: none;
+    /* Show on hover */
     gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s;
 }
 
 .tmc_header:hover .tmc_actions {
-    opacity: 1;
+    display: flex;
 }
 
 .tmc_btn {
-    padding: 2px 5px;
+    padding: 2px 6px;
     font-size: 12px;
     border-radius: 4px;
+    cursor: pointer;
 }
 
 .tmc_btn:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
-/* Content Area */
+/* Content (Container for Actual Chat Blocks) */
 .tmc_content {
-    border-top: 1px solid var(--SmartThemeBorderColor, #333);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* Align perfectly */
+    padding: 0;
+    margin: 0;
 }
 
-/* Cloned Items */
-.tmc_clone_item {
-    padding: 8px 10px !important;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+/* Override ST's block styles if needed to fit nicely */
+.tmc_content .select_chat_block {
     margin: 0 !important;
-    border-left: 3px solid transparent !important;
-    cursor: pointer;
+    width: 100% !important;
+    border: none !important;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #333) !important;
+    border-radius: 0 !important;
+    padding: 8px 12px !important;
+    background: transparent !important;
 }
 
-.tmc_clone_item:hover {
-    background: rgba(255, 255, 255, 0.04);
+.tmc_content .select_chat_block:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
 }
 
-.tmc_clone_item:last-child {
-    border-bottom: none;
-}
-
-/* Uncategorized Specifics */
+/* Uncategorized Styling */
 .tmc_uncat {
-    border-style: dashed;
+    border-color: transparent;
     background: transparent;
-    opacity: 0.9;
 }
 
 .tmc_uncat .tmc_header {
     background: transparent;
+    opacity: 0.7;
 }
 
 /* Context Menu */
 .tmc_ctx {
     position: fixed;
     background: var(--SmartThemeBlurTintColor, #1f1f33);
-    border: 1px solid var(--SmartThemeBorderColor, #555);
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
-    z-index: 10000;
-    padding: 6px 0;
-    width: 180px;
+    border: 1px solid var(--SmartThemeBorderColor, #888);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 99999;
+    min-width: 150px;
+    border-radius: 6px;
+    padding: 4px 0;
 }
 
 .tmc_ctx_head {
     padding: 6px 12px;
     font-size: 11px;
-    text-transform: uppercase;
     color: #888;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 4px;
 }
 
 .tmc_ctx_item {
     padding: 8px 12px;
-    font-size: 13px;
+    color: var(--SmartThemeBodyColor, #ddd);
     cursor: pointer;
-    color: var(--SmartThemeBodyColor, #ccc);
+    font-size: 13px;
 }
 
 .tmc_ctx_item:hover {
@@ -148,18 +148,28 @@
     color: #fff;
 }
 
-.tmc_ctx_item.active {
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
-}
-
-.tmc_ctx_item.active::after {
-    content: ' ✓';
-    float: right;
-}
-
 .tmc_ctx_sep {
     height: 1px;
-    background: var(--SmartThemeBorderColor, #444);
+    background: rgba(255, 255, 255, 0.1);
     margin: 4px 0;
+}
+
+.tmc_new {
+    color: #8c8;
+}
+
+/* Add Button in Popup Header */
+.tmc_add_btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    margin-left: 8px;
+    transition: background 0.2s;
+}
+
+.tmc_add_btn:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
