@@ -135,8 +135,9 @@
 /* Chat Item - Full native content with buttons */
 .tmc_proxy_block.select_chat_block {
     display: flex !important;
-    flex-direction: row !important;
-    align-items: flex-start !important;
+    /* FIX: Stack title/buttons and preview vertically */
+    flex-direction: column !important;
+    align-items: stretch !important;
     padding: 8px 10px !important;
     margin: 0 !important;
     border: none !important;
@@ -146,6 +147,8 @@
     transition: background 0.1s !important;
     width: 100% !important;
     box-sizing: border-box !important;
+    /* Ensure text wraps nicely */
+    white-space: normal !important;
 }
 
 .tmc_proxy_block.select_chat_block:hover {
