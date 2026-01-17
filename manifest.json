@@ -1,0 +1,12 @@
+{
+    "display_name": "Chat Folders",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "chaaruze",
+    "version": "1.0.0",
+    "homePage": "https://github.com/chaaruze/st-chat-folders",
+    "auto_update": true
+}
