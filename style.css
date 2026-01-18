@@ -431,8 +431,10 @@
 
 /* Extra small screens (phones in portrait) */
 @media screen and (max-width: 480px) {
+
+    /* Inherit height from the 768px query - removed 70vh cap */
     #tmc_proxy_root {
-        max-height: 70vh !important;
+        max-height: none !important;
     }
 
     .tmc_content {
