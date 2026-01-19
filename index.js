@@ -262,9 +262,33 @@
 
             const chatData = nativeBlocks.map(block => {
                 const fileName = block.getAttribute('file_name') || block.title || block.innerText.split('\n')[0].trim();
-                // Try to extract date from the block
-                const dateEl = block.querySelector('.select_chat_block_date, [title*="20"]');
-                const dateStr = dateEl ? dateEl.textContent || dateEl.title : '';
+
+                // Improved date extraction - try multiple sources
+                let dateStr = '';
+
+                // Method 1: Look for date element with specific classes
+                const dateEl = block.querySelector('.select_chat_block_date, .chat_date, [class*="date"]');
+                if (dateEl) {
+                    dateStr = dateEl.textContent || dateEl.title || '';
+                }
+
+                // Method 2: Look for elements containing date patterns (Jan XX, XXXX or similar)
+                if (!dateStr) {
+                    const allText = block.innerText || '';
+                    // Look for patterns like "Jan 18, 2026" or "January 18, 2026"
+                    const dateMatch = allText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/i);
+                    if (dateMatch) {
+                        dateStr = dateMatch[0];
+                    }
+                }
+
+                // Method 3: Check for ISO date in file_name or title
+                if (!dateStr && fileName) {
+                    const isoMatch = fileName.match(/\d{4}-\d{2}-\d{2}/);
+                    if (isoMatch) {
+                        dateStr = isoMatch[0];
+                    }
+                }
 
                 return {
                     element: block,
@@ -312,13 +336,6 @@
             const folderContents = {};
             const folderIds = settings.characterFolders[characterId] || [];
 
-            // SMART FOLDER: Recent
-            if (settings.showRecent !== false) {
-                const recentSection = createRecentDOM();
-                newTree.appendChild(recentSection);
-                folderContents['recent'] = recentSection.querySelector('.tmc_content');
-            }
-
             folderIds.forEach(fid => {
                 const folder = settings.folders[fid];
                 if (!folder) return;
@@ -344,16 +361,6 @@
                     container.insertBefore(proxy, container.firstChild);
                 } else {
                     container.appendChild(proxy);
-                }
-
-                // 2. Smart Recent Logic (Cloned item)
-                if (folderContents['recent']) {
-                    if (chat.date === 'Today' || chat.date === 'Yesterday') {
-                        const recentProxy = createProxyBlock(chat, isPinned);
-                        // Differentiate ID to avoid dupes if we used IDs (we don't)
-                        recentProxy.classList.add('tmc_recent_clone');
-                        folderContents['recent'].appendChild(recentProxy);
-                    }
                 }
             });
 
@@ -622,7 +629,7 @@
 
         // New Folder Button
         const btn = document.createElement('div');
-        btn.className = 'tmc_add_btn';  // Remove menu_button to avoid conflicts
+        btn.className = 'menu_button tmc_add_btn';
         btn.innerHTML = '<i class="fa-solid fa-folder-plus"></i> New Folder';
         btn.title = 'Create New Folder';
 
@@ -634,7 +641,7 @@
 
         // Bulk Select Button
         const bulkBtn = document.createElement('div');
-        bulkBtn.className = 'tmc_add_btn tmc_bulk_btn';
+        bulkBtn.className = 'menu_button tmc_add_btn tmc_bulk_btn';
         bulkBtn.innerHTML = '<i class="fa-solid fa-list-check"></i> Select';
         bulkBtn.title = 'Select Multiple Chats';
         bulkBtn.onclick = (e) => {
@@ -706,7 +713,7 @@
                     return f === fileName || (b.innerText && b.innerText.includes(fileName));
                 });
                 if (block) {
-                    const delBtn = block.querySelector('.mes_delete, [class*="delete"]');
+                    const delBtn = block.querySelector('.mes_delete, .PastChat_cross, .fa-skull, [class*="delete"], [title*="Delete"]');
                     if (delBtn) {
                         delBtn.click();
                         // Small delay to let UI process if needed, though native confirm usually blocks
