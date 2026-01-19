@@ -24,6 +24,12 @@
     let syncDebounceTimer = null;
     let bulkMode = false;
     let selectedChats = new Set();
+    let currentView = 'main'; // 'main' | 'folder'
+    let viewFolderId = null;
+    let chatsByFolder = {}; // Memory store for lazy loading (Removed)
+    let sortOrder = 'date-desc'; // Removed
+    const BATCH_SIZE = 20; // Removed
+    let lastSelectedChat = null; // Track last clicked for shift-select
     // Helper to clear selection
     function clearSelection() {
         selectedChats.clear();
@@ -236,6 +242,11 @@
         return 'uncategorized';
     }
 
+
+
+    // Sorting Helper (Removed)
+
+
     // ========== SYNC ENGINE ==========
 
     function scheduleSync() {
@@ -244,6 +255,9 @@
         // 15ms was too aggressive and caused constant re-rendering
         syncDebounceTimer = setTimeout(performSync, 200);
     }
+
+    // Lazy Loading Helpers (Removed)
+
 
     function performSync() {
         // Only sync if user has opened the panel
@@ -328,52 +342,98 @@
                 return;
             }
 
-            if (!characterId) {
-                proxyRoot.innerHTML = '<div style="padding:12px;opacity:0.6">Select a character</div>';
-                return;
-            }
-
             const folderContents = {};
             const folderIds = settings.characterFolders[characterId] || [];
 
-            folderIds.forEach(fid => {
-                const folder = settings.folders[fid];
-                if (!folder) return;
-                const section = createFolderDOM(fid, folder);
+            // VIEW LOGIC SWITCH
+            if (currentView === 'folder' && viewFolderId && settings.folders[viewFolderId]) {
+                // RENDER FOLDER VIEW
+                const folder = settings.folders[viewFolderId];
+                const section = createFolderViewDOM(viewFolderId, folder);
                 newTree.appendChild(section);
-                folderContents[fid] = section.querySelector('.tmc_content');
-            });
+                folderContents[viewFolderId] = section.querySelector('.tmc_content');
+            } else {
+                // RENDER MAIN VIEW
+                // Reset view if invalid
+                if (currentView === 'folder') {
+                    currentView = 'main';
+                    viewFolderId = null;
+                }
 
-            const uncatSection = createUncategorizedDOM();
-            newTree.appendChild(uncatSection);
-            folderContents['uncategorized'] = uncatSection.querySelector('.tmc_content');
+                folderIds.forEach(fid => {
+                    const folder = settings.folders[fid];
+                    if (!folder) return;
+                    const section = createFolderDOM(fid, folder);
+                    newTree.appendChild(section);
+                    folderContents[fid] = section.querySelector('.tmc_content');
+                });
+
+                const uncatSection = createUncategorizedDOM();
+                newTree.appendChild(uncatSection);
+                folderContents['uncategorized'] = uncatSection.querySelector('.tmc_content');
+            }
+
+
+            // Synchronous Rendering (Reverted)
 
             chatData.forEach(chat => {
                 const isPinned = settings.pinned && settings.pinned[chat.fileName];
-
-                // 1. Regular Folder Logic
                 const fid = getFolderForChat(chat.fileName);
-                const container = folderContents[fid] || folderContents['uncategorized'];
-                const proxy = createProxyBlock(chat, isPinned);
 
+                // If in folder view, only process valid chats
+                if (currentView === 'folder' && fid !== viewFolderId) return;
+
+                const container = folderContents[fid];
+                if (!container) return;
+
+                // Create and append locally
+                // Note: No sorting other than Pin logic here for now
                 if (isPinned) {
-                    // Pinned items go to the top
+                    const proxy = createProxyBlock(chat, isPinned);
                     container.insertBefore(proxy, container.firstChild);
                 } else {
+                    const proxy = createProxyBlock(chat, isPinned);
                     container.appendChild(proxy);
                 }
             });
 
+            // Update Counts & Visibility
             Object.keys(folderContents).forEach(fid => {
                 const container = folderContents[fid];
-                const count = container.children.length;
                 const section = container.closest('.tmc_section');
+                const children = Array.from(container.children).filter(c => c.classList.contains('tmc_proxy_block'));
 
+                // Update badge
                 const badge = section.querySelector('.tmc_count');
-                if (badge) badge.textContent = count;
+                if (badge) badge.textContent = children.length;
 
+                // Hide if empty (uncategorized only)
                 if (fid === 'uncategorized') {
-                    section.style.display = count > 0 ? '' : 'none';
+                    section.style.display = children.length > 0 ? '' : 'none';
+                }
+
+                // Truncation logic (Main View)
+                if (currentView === 'main' && fid !== 'uncategorized') {
+                    if (children.length > 3) {
+                        // Hide excess
+                        children.forEach((c, i) => {
+                            if (i >= 3) c.remove(); // Remove from DOM
+                        });
+
+                        // Show More
+                        if (!container.querySelector('.tmc_show_more')) {
+                            const showMore = document.createElement('div');
+                            showMore.className = 'tmc_show_more';
+                            showMore.innerHTML = `<i class=\"fa-solid fa-ellipsis\"></i> Show more (${children.length - 3} more)`;
+                            showMore.onclick = (e) => {
+                                e.stopPropagation();
+                                currentView = 'folder';
+                                viewFolderId = fid;
+                                scheduleSync();
+                            };
+                            container.appendChild(showMore);
+                        }
+                    }
                 }
             });
 
@@ -475,6 +535,65 @@
         return section;
     }
 
+    function createFolderViewDOM(fid, folder) {
+        const section = document.createElement('div');
+        section.className = 'tmc_section tmc_folder_view';
+        section.dataset.id = fid;
+
+        const header = document.createElement('div');
+        header.className = 'tmc_header tmc_folder_view_header';
+        header.innerHTML = `
+            <div class="tmc_header_left" style="cursor: default;">
+                <span class="tmc_back_btn" title="Back"><i class="fa-solid fa-arrow-left"></i></span>
+                <span class="tmc_icon"><i class="fa-solid fa-folder-open"></i></span>
+                <span class="tmc_name">${escapeHtml(folder.name)}</span>
+                <span class="tmc_count">0</span>
+            </div>
+             <div class="tmc_header_right">
+                <span class="tmc_btn tmc_color" title="Color"><i class="fa-solid fa-palette"></i></span>
+                <span class="tmc_btn tmc_edit" title="Rename"><i class="fa-solid fa-pencil"></i></span>
+            </div>
+        `;
+
+        // Apply Color in header
+        if (folder.color) {
+            const c = FOLDER_COLORS[folder.color] || folder.color;
+            if (c && c !== 'transparent') {
+                header.style.borderLeft = `4px solid ${c}`;
+                header.style.background = `${c}22`;
+            }
+        }
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.style.cssText = 'visibility: hidden; position: absolute; width: 0; height: 0; pointer-events: none;';
+        colorInput.value = (folder.color && FOLDER_COLORS[folder.color] && FOLDER_COLORS[folder.color] !== 'transparent') ? FOLDER_COLORS[folder.color] : '#ffffff';
+        section.appendChild(colorInput);
+
+        header.querySelector('.tmc_color').onclick = (e) => { e.stopPropagation(); colorInput.click(); };
+        colorInput.onchange = (e) => { setFolderColor(fid, e.target.value); };
+
+        header.querySelector('.tmc_back_btn').onclick = (e) => {
+            e.stopPropagation();
+            currentView = 'main';
+            viewFolderId = null;
+            scheduleSync();
+        };
+
+        header.querySelector('.tmc_edit').onclick = (e) => {
+            e.stopPropagation();
+            const n = prompt('Rename:', folder.name);
+            if (n) renameFolder(fid, n);
+        };
+
+        const content = document.createElement('div');
+        content.className = 'tmc_content';
+
+        section.appendChild(header);
+        section.appendChild(content);
+        return section;
+    }
+
     function createUncategorizedDOM() {
         const section = document.createElement('div');
         section.className = 'tmc_section tmc_uncat';
@@ -531,6 +650,11 @@
 
         // Use full native HTML content (includes preview, buttons, etc.)
         el.innerHTML = chatData.html;
+
+        el.innerHTML = chatData.html;
+
+
+
         el.title = chatData.fileName;
         el.setAttribute('file_name', chatData.fileName);
 
@@ -591,11 +715,39 @@
             if (bulkMode) {
                 e.stopPropagation();
                 e.preventDefault();
-                if (selectedChats.has(chatData.fileName)) {
-                    selectedChats.delete(chatData.fileName);
+
+                if (e.shiftKey && lastSelectedChat) {
+                    // Range Selection
+                    const allBlocks = Array.from(document.querySelectorAll('.tmc_proxy_block'));
+                    const startIdx = allBlocks.findIndex(b => b.getAttribute('file_name') === lastSelectedChat);
+                    const endIdx = allBlocks.findIndex(b => b.getAttribute('file_name') === chatData.fileName);
+
+                    if (startIdx > -1 && endIdx > -1) {
+                        const low = Math.min(startIdx, endIdx);
+                        const high = Math.max(startIdx, endIdx);
+
+                        for (let i = low; i <= high; i++) {
+                            const fname = allBlocks[i].getAttribute('file_name');
+                            if (fname) selectedChats.add(fname);
+                        }
+                    } else {
+                        // Fallback if not found
+                        if (selectedChats.has(chatData.fileName)) {
+                            selectedChats.delete(chatData.fileName);
+                        } else {
+                            selectedChats.add(chatData.fileName);
+                        }
+                    }
                 } else {
-                    selectedChats.add(chatData.fileName);
+                    // Normal Toggle
+                    if (selectedChats.has(chatData.fileName)) {
+                        selectedChats.delete(chatData.fileName);
+                    } else {
+                        selectedChats.add(chatData.fileName);
+                    }
+                    lastSelectedChat = chatData.fileName;
                 }
+
                 scheduleSync(); // Re-render to show selection
                 updateBulkBar();
                 return;
@@ -652,15 +804,14 @@
             updateBulkBar();
         };
 
-        // Insert right after "New Chat" button
-        const newChatBtn = headerRow.querySelector('#newChatFromManageScreenButton');
-        if (newChatBtn && newChatBtn.nextSibling) {
-            headerRow.insertBefore(bulkBtn, newChatBtn.nextSibling);
-            headerRow.insertBefore(btn, bulkBtn);
-        } else {
-            // Fallback: insert at beginning
-            headerRow.insertBefore(bulkBtn, headerRow.firstChild);
-            headerRow.insertBefore(btn, bulkBtn);
+
+
+        // Inject into the header row (found earlier)
+        // Check if there is a 'right-sided' area
+        // SillyTavern headers often flex. Let's just append to the headerRow.
+        if (!headerRow.querySelector('.tmc_add_btn')) {
+            headerRow.appendChild(bulkBtn);
+            headerRow.appendChild(btn);
         }
     }
 
@@ -698,7 +849,7 @@
 
     }
 
-    // ========== CONTEXT MENU ==========
+
 
     // ========== CONTEXT MENU ==========
 
