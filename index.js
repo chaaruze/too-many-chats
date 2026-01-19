@@ -15,11 +15,41 @@
     const defaultSettings = Object.freeze({
         folders: {},
         characterFolders: {},
-        version: '1.0.0'
+        pinned: {},
+        showRecent: true,
+        version: '1.1.0'
     });
 
     let observer = null;
     let syncDebounceTimer = null;
+    let bulkMode = false;
+    let selectedChats = new Set();
+    let currentView = 'main'; // 'main' | 'folder'
+    let viewFolderId = null;
+    let chatsByFolder = {}; // Memory store for lazy loading (Removed)
+    let sortOrder = 'date-desc'; // Removed
+    const BATCH_SIZE = 20; // Removed
+    let lastSelectedChat = null; // Track last clicked for shift-select
+    // Helper to clear selection
+    function clearSelection() {
+        selectedChats.clear();
+        bulkMode = false;
+        updateBulkBar();
+        scheduleSync();
+    }
+
+    // ========== STYLES ==========
+    // Extended to support raw hexes in logic
+    const FOLDER_COLORS = {
+        'red': '#ff6b6b',
+        'orange': '#ffa94d',
+        'yellow': '#ffec99',
+        'green': '#69db7c',
+        'blue': '#4dabf7',
+        'purple': '#b197fc',
+        'pink': '#fcc2d7',
+        'default': 'transparent'
+    };
     let userOpenedPanel = false;  // Track if user intentionally opened the panel
 
     // ========== SETTINGS ==========
@@ -126,6 +156,34 @@
         }
     }
 
+    function setFolderColor(folderId, colorKeyOrHex) {
+        const settings = getSettings();
+        if (settings.folders[folderId]) {
+            // Check if it's a key in FOLDER_COLORS, otherwise treat as hex
+            if (FOLDER_COLORS[colorKeyOrHex]) {
+                settings.folders[folderId].color = colorKeyOrHex;
+            } else {
+                // It is a hex from picker
+                settings.folders[folderId].color = colorKeyOrHex;
+            }
+            saveSettings();
+            scheduleSync();
+        }
+    }
+
+    function togglePin(fileName) {
+        const settings = getSettings();
+        if (!settings.pinned) settings.pinned = {};
+
+        if (settings.pinned[fileName]) {
+            delete settings.pinned[fileName];
+        } else {
+            settings.pinned[fileName] = true;
+        }
+        saveSettings();
+        scheduleSync();
+    }
+
     function deleteFolder(folderId) {
         const settings = getSettings();
         const characterId = getCurrentCharacterId();
@@ -183,6 +241,11 @@
         return 'uncategorized';
     }
 
+
+
+    // Sorting Helper (Removed)
+
+
     // ========== SYNC ENGINE ==========
 
     function scheduleSync() {
@@ -191,6 +254,9 @@
         // 15ms was too aggressive and caused constant re-rendering
         syncDebounceTimer = setTimeout(performSync, 200);
     }
+
+    // Lazy Loading Helpers (Removed)
+
 
     function performSync() {
         // Only sync if user has opened the panel
@@ -209,9 +275,33 @@
 
             const chatData = nativeBlocks.map(block => {
                 const fileName = block.getAttribute('file_name') || block.title || block.innerText.split('\n')[0].trim();
-                // Try to extract date from the block
-                const dateEl = block.querySelector('.select_chat_block_date, [title*="20"]');
-                const dateStr = dateEl ? dateEl.textContent || dateEl.title : '';
+
+                // Improved date extraction - try multiple sources
+                let dateStr = '';
+
+                // Method 1: Look for date element with specific classes
+                const dateEl = block.querySelector('.select_chat_block_date, .chat_date, [class*="date"]');
+                if (dateEl) {
+                    dateStr = dateEl.textContent || dateEl.title || '';
+                }
+
+                // Method 2: Look for elements containing date patterns (Jan XX, XXXX or similar)
+                if (!dateStr) {
+                    const allText = block.innerText || '';
+                    // Look for patterns like "Jan 18, 2026" or "January 18, 2026"
+                    const dateMatch = allText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/i);
+                    if (dateMatch) {
+                        dateStr = dateMatch[0];
+                    }
+                }
+
+                // Method 3: Check for ISO date in file_name or title
+                if (!dateStr && fileName) {
+                    const isoMatch = fileName.match(/\d{4}-\d{2}-\d{2}/);
+                    if (isoMatch) {
+                        dateStr = isoMatch[0];
+                    }
+                }
 
                 return {
                     element: block,
@@ -251,38 +341,98 @@
                 return;
             }
 
-            const folderIds = settings.characterFolders[characterId] || [];
             const folderContents = {};
+            const folderIds = settings.characterFolders[characterId] || [];
 
-            folderIds.forEach(fid => {
-                const folder = settings.folders[fid];
-                if (!folder) return;
-                const section = createFolderDOM(fid, folder);
+            // VIEW LOGIC SWITCH
+            if (currentView === 'folder' && viewFolderId && settings.folders[viewFolderId]) {
+                // RENDER FOLDER VIEW
+                const folder = settings.folders[viewFolderId];
+                const section = createFolderViewDOM(viewFolderId, folder);
                 newTree.appendChild(section);
-                folderContents[fid] = section.querySelector('.tmc_content');
-            });
+                folderContents[viewFolderId] = section.querySelector('.tmc_content');
+            } else {
+                // RENDER MAIN VIEW
+                // Reset view if invalid
+                if (currentView === 'folder') {
+                    currentView = 'main';
+                    viewFolderId = null;
+                }
 
-            const uncatSection = createUncategorizedDOM();
-            newTree.appendChild(uncatSection);
-            folderContents['uncategorized'] = uncatSection.querySelector('.tmc_content');
+                folderIds.forEach(fid => {
+                    const folder = settings.folders[fid];
+                    if (!folder) return;
+                    const section = createFolderDOM(fid, folder);
+                    newTree.appendChild(section);
+                    folderContents[fid] = section.querySelector('.tmc_content');
+                });
+
+                const uncatSection = createUncategorizedDOM();
+                newTree.appendChild(uncatSection);
+                folderContents['uncategorized'] = uncatSection.querySelector('.tmc_content');
+            }
+
+
+            // Synchronous Rendering (Reverted)
 
             chatData.forEach(chat => {
+                const isPinned = settings.pinned && settings.pinned[chat.fileName];
                 const fid = getFolderForChat(chat.fileName);
-                const container = folderContents[fid] || folderContents['uncategorized'];
-                const proxy = createProxyBlock(chat);
-                container.appendChild(proxy);
+
+                // If in folder view, only process valid chats
+                if (currentView === 'folder' && fid !== viewFolderId) return;
+
+                const container = folderContents[fid];
+                if (!container) return;
+
+                // Create and append locally
+                // Note: No sorting other than Pin logic here for now
+                if (isPinned) {
+                    const proxy = createProxyBlock(chat, isPinned);
+                    container.insertBefore(proxy, container.firstChild);
+                } else {
+                    const proxy = createProxyBlock(chat, isPinned);
+                    container.appendChild(proxy);
+                }
             });
 
+            // Update Counts & Visibility
             Object.keys(folderContents).forEach(fid => {
                 const container = folderContents[fid];
-                const count = container.children.length;
                 const section = container.closest('.tmc_section');
+                const children = Array.from(container.children).filter(c => c.classList.contains('tmc_proxy_block'));
 
+                // Update badge
                 const badge = section.querySelector('.tmc_count');
-                if (badge) badge.textContent = count;
+                if (badge) badge.textContent = children.length;
 
+                // Hide if empty (uncategorized only)
                 if (fid === 'uncategorized') {
-                    section.style.display = count > 0 ? '' : 'none';
+                    section.style.display = children.length > 0 ? '' : 'none';
+                }
+
+                // Truncation logic (Main View)
+                if (currentView === 'main' && fid !== 'uncategorized') {
+                    if (children.length > 3) {
+                        // Hide excess
+                        children.forEach((c, i) => {
+                            if (i >= 3) c.remove(); // Remove from DOM
+                        });
+
+                        // Show More
+                        if (!container.querySelector('.tmc_show_more')) {
+                            const showMore = document.createElement('div');
+                            showMore.className = 'tmc_show_more';
+                            showMore.innerHTML = `<i class=\"fa-solid fa-ellipsis\"></i> Show more (${children.length - 3} more)`;
+                            showMore.onclick = (e) => {
+                                e.stopPropagation();
+                                currentView = 'folder';
+                                viewFolderId = fid;
+                                scheduleSync();
+                            };
+                            container.appendChild(showMore);
+                        }
+                    }
                 }
             });
 
@@ -312,10 +462,48 @@
                 <span class="tmc_count">0</span>
             </div>
             <div class="tmc_header_right">
+                <span class="tmc_btn tmc_color" title="Color"><i class="fa-solid fa-palette"></i></span>
                 <span class="tmc_btn tmc_edit" title="Rename"><i class="fa-solid fa-pencil"></i></span>
                 <span class="tmc_btn tmc_del" title="Delete"><i class="fa-solid fa-trash"></i></span>
             </div>
         `;
+
+        // Apply Color
+        if (folder.color) {
+            // It could be a key or a raw hex
+            const c = FOLDER_COLORS[folder.color] || folder.color;
+            if (c && c !== 'transparent') {
+                header.style.borderLeft = `4px solid ${c}`;
+                header.style.background = `${c}22`; // Low opacity background
+            }
+        }
+
+        // Hidden color input - must use visibility:hidden, not display:none for clicks to work reliably
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.style.cssText = 'visibility: hidden; position: absolute; width: 0; height: 0; pointer-events: none;';
+        colorInput.value = (folder.color && FOLDER_COLORS[folder.color] && FOLDER_COLORS[folder.color] !== 'transparent')
+            ? FOLDER_COLORS[folder.color]
+            : '#ffffff';
+
+        section.appendChild(colorInput);
+
+        header.querySelector('.tmc_color').onclick = (e) => {
+            e.stopPropagation();
+            colorInput.click();
+        };
+
+        colorInput.onchange = (e) => {
+            // WE need to save the custom HEX or map it to closest? 
+            // The prompt asked for keys (red, blue). 
+            // User requested "picker". 
+            // We should support custom hexes in setFolderColor now.
+            // But FOLDER_COLORS is a map.
+            // Let's modify setFolderColor to handle direct hex or extend the map?
+            // Easiest: Just use the hex directly if it doesn't match a key.
+            const val = e.target.value;
+            setFolderColor(fid, val);
+        };
 
         header.querySelector('.tmc_header_left').onclick = () => {
             const s = getSettings();
@@ -346,6 +534,65 @@
         return section;
     }
 
+    function createFolderViewDOM(fid, folder) {
+        const section = document.createElement('div');
+        section.className = 'tmc_section tmc_folder_view';
+        section.dataset.id = fid;
+
+        const header = document.createElement('div');
+        header.className = 'tmc_header tmc_folder_view_header';
+        header.innerHTML = `
+            <div class="tmc_header_left" style="cursor: default;">
+                <span class="tmc_back_btn" title="Back"><i class="fa-solid fa-arrow-left"></i></span>
+                <span class="tmc_icon"><i class="fa-solid fa-folder-open"></i></span>
+                <span class="tmc_name">${escapeHtml(folder.name)}</span>
+                <span class="tmc_count">0</span>
+            </div>
+             <div class="tmc_header_right">
+                <span class="tmc_btn tmc_color" title="Color"><i class="fa-solid fa-palette"></i></span>
+                <span class="tmc_btn tmc_edit" title="Rename"><i class="fa-solid fa-pencil"></i></span>
+            </div>
+        `;
+
+        // Apply Color in header
+        if (folder.color) {
+            const c = FOLDER_COLORS[folder.color] || folder.color;
+            if (c && c !== 'transparent') {
+                header.style.borderLeft = `4px solid ${c}`;
+                header.style.background = `${c}22`;
+            }
+        }
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.style.cssText = 'visibility: hidden; position: absolute; width: 0; height: 0; pointer-events: none;';
+        colorInput.value = (folder.color && FOLDER_COLORS[folder.color] && FOLDER_COLORS[folder.color] !== 'transparent') ? FOLDER_COLORS[folder.color] : '#ffffff';
+        section.appendChild(colorInput);
+
+        header.querySelector('.tmc_color').onclick = (e) => { e.stopPropagation(); colorInput.click(); };
+        colorInput.onchange = (e) => { setFolderColor(fid, e.target.value); };
+
+        header.querySelector('.tmc_back_btn').onclick = (e) => {
+            e.stopPropagation();
+            currentView = 'main';
+            viewFolderId = null;
+            scheduleSync();
+        };
+
+        header.querySelector('.tmc_edit').onclick = (e) => {
+            e.stopPropagation();
+            const n = prompt('Rename:', folder.name);
+            if (n) renameFolder(fid, n);
+        };
+
+        const content = document.createElement('div');
+        content.className = 'tmc_content';
+
+        section.appendChild(header);
+        section.appendChild(content);
+        return section;
+    }
+
     function createUncategorizedDOM() {
         const section = document.createElement('div');
         section.className = 'tmc_section tmc_uncat';
@@ -369,15 +616,74 @@
         return section;
     }
 
+    function createRecentDOM() {
+        const section = document.createElement('div');
+        section.className = 'tmc_section tmc_recent';
+        // Virtual ID, not in settings (unless we want to save collapse state later)
+        section.dataset.id = 'recent';
+
+        const header = document.createElement('div');
+        header.className = 'tmc_header';
+        header.innerHTML = `
+            <div class="tmc_header_left">
+                <span class="tmc_icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                <span class="tmc_name">Recent</span>
+                <span class="tmc_count">0</span>
+            </div>
+        `;
+
+        const content = document.createElement('div');
+        content.className = 'tmc_content';
+
+        section.appendChild(header);
+        section.appendChild(content);
+        return section;
+    }
+
     // Proxy block with FULL native content (buttons, preview, etc.)
-    function createProxyBlock(chatData) {
+    // Proxy block with FULL native content (buttons, preview, etc.)
+    function createProxyBlock(chatData, isPinned) {
         const el = document.createElement('div');
         el.className = 'select_chat_block tmc_proxy_block';
+        if (isPinned) el.classList.add('tmc_pinned');
 
         // Use full native HTML content (includes preview, buttons, etc.)
         el.innerHTML = chatData.html;
+
+        el.innerHTML = chatData.html;
+
+
+
         el.title = chatData.fileName;
         el.setAttribute('file_name', chatData.fileName);
+
+        // Render Pin Visual
+        if (isPinned) {
+            const pinIcon = document.createElement('span');
+            pinIcon.className = 'tmc_pin_icon';
+            pinIcon.innerHTML = '📌';
+            pinIcon.style.cssText = 'font-size: 12px; margin-right: 5px; opacity: 0.8;';
+
+            // Insert before title or at start
+            const titleEl = el.querySelector('.select_chat_block_title') || el.querySelector('.avatar_title_div');
+            if (titleEl) {
+                titleEl.prepend(pinIcon);
+            } else {
+                el.prepend(pinIcon);
+            }
+        }
+
+        // BULK MODE VISUALS
+        if (bulkMode) {
+            const check = document.createElement('div');
+            check.className = 'tmc_bulk_check';
+            check.innerHTML = selectedChats.has(chatData.fileName) ? '<i class="fa-solid fa-square-check"></i>' : '<i class="fa-regular fa-square"></i>';
+            el.prepend(check);
+
+            if (selectedChats.has(chatData.fileName)) {
+                el.classList.add('tmc_selected');
+            }
+        }
 
         // FIX: Move pencil icon to the right side with other action buttons
         const pencilBtn = el.querySelector('.renameChatButton');
@@ -389,23 +695,67 @@
             actionContainer.insertBefore(pencilBtn, actionContainer.firstChild);
         }
 
+
+
         // Intercept main click (not on buttons)
         el.addEventListener('click', (e) => {
             // Don't intercept if clicking on action buttons
             if (e.target.closest('.renameChatButton, .select_chat_block_action, .mes_edit, .mes_delete, .mes_export, button, a, [class*="export"], [class*="delete"], [class*="download"]')) {
-                // Find corresponding button in hidden original and click it
+                // ... existing button logic
                 const clickedClass = e.target.closest('[class]')?.className;
                 if (clickedClass) {
                     const originalBtn = chatData.element.querySelector('.' + clickedClass.split(' ')[0]);
-                    if (originalBtn) {
-                        originalBtn.click();
-                        return;
-                    }
+                    if (originalBtn) originalBtn.click();
                 }
+                return;
             }
+
+            // BULK MODE LOGIC
+            if (bulkMode) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                if (e.shiftKey && lastSelectedChat) {
+                    // Range Selection
+                    const allBlocks = Array.from(document.querySelectorAll('.tmc_proxy_block'));
+                    const startIdx = allBlocks.findIndex(b => b.getAttribute('file_name') === lastSelectedChat);
+                    const endIdx = allBlocks.findIndex(b => b.getAttribute('file_name') === chatData.fileName);
+
+                    if (startIdx > -1 && endIdx > -1) {
+                        const low = Math.min(startIdx, endIdx);
+                        const high = Math.max(startIdx, endIdx);
+
+                        for (let i = low; i <= high; i++) {
+                            const fname = allBlocks[i].getAttribute('file_name');
+                            if (fname) selectedChats.add(fname);
+                        }
+                    } else {
+                        // Fallback if not found
+                        if (selectedChats.has(chatData.fileName)) {
+                            selectedChats.delete(chatData.fileName);
+                        } else {
+                            selectedChats.add(chatData.fileName);
+                        }
+                    }
+                } else {
+                    // Normal Toggle
+                    if (selectedChats.has(chatData.fileName)) {
+                        selectedChats.delete(chatData.fileName);
+                    } else {
+                        selectedChats.add(chatData.fileName);
+                    }
+                    lastSelectedChat = chatData.fileName;
+                }
+
+                scheduleSync(); // Re-render to show selection
+                updateBulkBar();
+                return;
+            }
+
             // Otherwise load the chat
             chatData.element.click();
         });
+
 
         el.oncontextmenu = (e) => {
             e.preventDefault();
@@ -428,43 +778,113 @@
             return;
         }
 
+        // New Folder Button
         const btn = document.createElement('div');
-        btn.className = 'tmc_add_btn';  // Remove menu_button to avoid conflicts
+        btn.className = 'menu_button tmc_add_btn';
         btn.innerHTML = '<i class="fa-solid fa-folder-plus"></i> New Folder';
         btn.title = 'Create New Folder';
-        // Apply full inline styles to ensure they work regardless of specificity
-        // Styles are now handled in style.css
 
         btn.onclick = (e) => {
             e.stopPropagation();
             const n = prompt('New Folder Name:');
             if (n) createFolder(n);
         };
-        // Insert right after "New Chat" button
-        const newChatBtn = headerRow.querySelector('#newChatFromManageScreenButton');
-        if (newChatBtn && newChatBtn.nextSibling) {
-            headerRow.insertBefore(btn, newChatBtn.nextSibling);
-        } else {
-            // Fallback: insert at beginning
-            headerRow.insertBefore(btn, headerRow.firstChild);
+
+        // Bulk Select Button
+        const bulkBtn = document.createElement('div');
+        bulkBtn.className = 'menu_button tmc_add_btn tmc_bulk_btn';
+        bulkBtn.innerHTML = '<i class="fa-solid fa-list-check"></i> Select';
+        bulkBtn.title = 'Select Multiple Chats';
+        bulkBtn.onclick = (e) => {
+            e.stopPropagation();
+            bulkMode = !bulkMode;
+            if (!bulkMode) selectedChats.clear();
+            scheduleSync();
+            updateBulkBar();
+        };
+
+
+
+        // Inject into the header row (found earlier)
+        // Check if there is a 'right-sided' area
+        // SillyTavern headers often flex. Let's just append to the headerRow.
+        if (!headerRow.querySelector('.tmc_add_btn')) {
+            headerRow.appendChild(bulkBtn);
+            headerRow.appendChild(btn);
         }
     }
 
+    function updateBulkBar() {
+        let bar = document.querySelector('#tmc_bulk_bar');
+        if (!bulkMode) {
+            if (bar) bar.remove();
+            return;
+        }
+
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'tmc_bulk_bar';
+            document.body.appendChild(bar);
+        }
+
+        const count = selectedChats.size;
+        bar.innerHTML = `
+            <div class="tmc_bulk_info">${count} Selected</div>
+            <div class="tmc_bulk_actions">
+                <button id="tmc_bulk_move" ${count === 0 ? 'disabled' : ''}><i class="fa-solid fa-folder-open"></i> Move</button>
+                <button id="tmc_bulk_cancel">Cancel</button>
+            </div>
+        `;
+
+        bar.querySelector('#tmc_bulk_cancel').onclick = clearSelection;
+
+        bar.querySelector('#tmc_bulk_move').onclick = (e) => {
+            if (count === 0) return;
+            // Hacky: reuse render context menu logic but for bulk
+            // We pass a dummy event to position it center or just list folders
+            showContextMenu(e, null, true); // true = bulk mode
+        };
+
+
+    }
+
+
+
     // ========== CONTEXT MENU ==========
 
-    function showContextMenu(e, fileName) {
+    function showContextMenu(e, fileName, isBulk = false) {
         document.querySelectorAll('.tmc_ctx').forEach(m => m.remove());
 
         const menu = document.createElement('div');
         menu.className = 'tmc_ctx';
-        menu.style.top = e.pageY + 'px';
-        menu.style.left = e.pageX + 'px';
+
+        // Position centering if bulk
+        if (isBulk) {
+            menu.style.top = '50%';
+            menu.style.left = '50%';
+            menu.style.transform = 'translate(-50%, -50%)';
+            menu.style.position = 'fixed';
+            menu.style.maxHeight = '80vh';
+            menu.style.overflowY = 'auto';
+        } else {
+            menu.style.top = e.pageY + 'px';
+            menu.style.left = e.pageX + 'px';
+        }
 
         const settings = getSettings();
         const characterId = getCurrentCharacterId();
         const folderIds = settings.characterFolders[characterId] || [];
 
-        let html = '<div class="tmc_ctx_head">Move to</div>';
+        let html = '<div class="tmc_ctx_head">' + (isBulk ? `Move ${selectedChats.size} chats to...` : 'Actions') + '</div>';
+
+        if (!isBulk) {
+            // Pin option
+            const pinText = (getSettings().pinned && getSettings().pinned[fileName]) ? 'Unpin' : 'Pin to top';
+            html += `<div class="tmc_ctx_item" data-action="pin">📌 ${pinText}</div>`;
+            html += '<div class="tmc_ctx_sep"></div>';
+            html += '<div class="tmc_ctx_head">Move to</div>';
+        }
+
         folderIds.forEach(fid => {
             const f = settings.folders[fid];
             html += `<div class="tmc_ctx_item" data-fid="${fid}">📁 ${escapeHtml(f.name)}</div>`;
@@ -472,20 +892,31 @@
         html += '<div class="tmc_ctx_sep"></div>';
         html += '<div class="tmc_ctx_item" data-fid="uncategorized">💬 Your chats</div>';
 
-
         menu.innerHTML = html;
         document.body.appendChild(menu);
 
         menu.onclick = (ev) => {
             const item = ev.target.closest('.tmc_ctx_item');
             if (!item) return;
-            // Only "Move to folder" actions remain
-            moveChat(fileName, item.dataset.fid);
+
+            if (isBulk) {
+                const targetFid = item.dataset.fid;
+                selectedChats.forEach(file => moveChat(file, targetFid));
+                clearSelection();
+            } else {
+                if (item.dataset.action === 'pin') {
+                    togglePin(fileName);
+                } else {
+                    moveChat(fileName, item.dataset.fid);
+                }
+            }
             menu.remove();
         };
 
         setTimeout(() => {
-            document.addEventListener('click', () => menu.remove(), { once: true });
+            document.addEventListener('click', (ev) => {
+                if (!menu.contains(ev.target)) menu.remove();
+            }, { once: true });
         }, 50);
     }
 
