@@ -682,7 +682,6 @@
             <div class="tmc_bulk_info">${count} Selected</div>
             <div class="tmc_bulk_actions">
                 <button id="tmc_bulk_move" ${count === 0 ? 'disabled' : ''}><i class="fa-solid fa-folder-open"></i> Move</button>
-                <button id="tmc_bulk_del" ${count === 0 ? 'disabled' : ''} style="background:var(--SmartThemeRed);color:#fff;"><i class="fa-solid fa-trash"></i> Delete</button>
                 <button id="tmc_bulk_cancel">Cancel</button>
             </div>
         `;
@@ -696,33 +695,7 @@
             showContextMenu(e, null, true); // true = bulk mode
         };
 
-        bar.querySelector('#tmc_bulk_del').onclick = async (e) => {
-            if (count === 0) return;
-            if (!confirm(`Delete ${count} chats? You may need to confirm native popups for each.`)) return;
 
-            // Iterate and trigger native delete
-            // We need to find the NATIVE blocks, not our proxies
-            const popup = document.querySelector('#shadow_select_chat_popup') || document.querySelector('#select_chat_popup');
-            if (!popup) return;
-
-            const nativeBlocks = Array.from(popup.querySelectorAll('.select_chat_block:not(.tmc_proxy_block)'));
-
-            for (const fileName of selectedChats) {
-                const block = nativeBlocks.find(b => {
-                    const f = b.getAttribute('file_name') || b.title;
-                    return f === fileName || (b.innerText && b.innerText.includes(fileName));
-                });
-                if (block) {
-                    const delBtn = block.querySelector('.mes_delete, .PastChat_cross, .fa-skull, [class*="delete"], [title*="Delete"]');
-                    if (delBtn) {
-                        delBtn.click();
-                        // Small delay to let UI process if needed, though native confirm usually blocks
-                        await new Promise(r => setTimeout(r, 100));
-                    }
-                }
-            }
-            clearSelection();
-        };
     }
 
     // ========== CONTEXT MENU ==========
