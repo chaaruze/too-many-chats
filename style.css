@@ -289,6 +289,32 @@
     flex-shrink: 0 !important;
 }
 
+.tmc_mobile_menu {
+    display: none;
+    /* Hidden by default on desktop */
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.6;
+    color: var(--SmartThemeBodyColor);
+    margin-left: auto;
+    /* Push to right */
+    align-self: center;
+}
+
+.tmc_mobile_menu:hover {
+    opacity: 1;
+    background: var(--SmartThemeBlurTintColor);
+    border-radius: 4px;
+}
+
+@media screen and (max-width: 768px) {
+    .tmc_mobile_menu {
+        display: block;
+        /* Show on mobile/tablet */
+    }
+}
+
 .tmc_proxy_block.select_chat_block:hover {
     background: var(--SmartThemeBlurTintColor) !important;
     border-color: var(--SmartThemeQuoteColor) !important;
